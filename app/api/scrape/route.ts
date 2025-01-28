@@ -40,7 +40,12 @@ export async function GET(req: Request) {
     );
     return NextResponse.json(projects);
 
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to scrape data" }, { status: 500 });
+  }catch (error: unknown) {
+    console.error("Scraping error:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    
+    return NextResponse.json({ error: "Failed to scrape data", details: errorMessage }, { status: 500 });
   }
+  
 }
