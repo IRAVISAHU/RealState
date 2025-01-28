@@ -1,0 +1,46 @@
+import { NextResponse } from "next/server";
+import axios from "axios";
+import * as cheerio from "cheerio";
+
+const POSITIONSTACK_API_KEY = process.env.POSITIONSTACK_API_KEY;
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const city = searchParams.get("city");
+
+  if (!city) return NextResponse.json({ error: "City is required" }, { status: 400 });
+
+  try {
+    const url = `https://www.magicbricks.com/new-projects-${city}`;
+    const { data } = await axios.get(url);
+
+    const $ = cheerio.load(data);
+    const projects = await Promise.all(
+      $(".mghome__prjblk__txtsec").map(async (index, element) => {
+        const projectName = $(element).find(".mghome__prjblk__prjname").text().trim();
+        const location = $(element).find(".mghome__prjblk__locname").text().trim();
+        const price = $(element).find(".mghome__prjblk__price").text().trim();
+        const geoResponse = await axios.get("http://api.positionstack.com/v1/forward", {
+          params: {
+            access_key: POSITIONSTACK_API_KEY,
+            query: location,
+          },
+        });
+
+        const { latitude, longitude } = geoResponse.data.data[0] || {};
+
+        return {
+          projectName,
+          location,
+          price,
+          latitude: latitude || 0,
+          longitude: longitude || 0,
+        };
+      }).get()
+    );
+    return NextResponse.json(projects);
+
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to scrape data" }, { status: 500 });
+  }
+}
