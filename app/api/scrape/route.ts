@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
 import * as cheerio from "cheerio";
 
 const POSITIONSTACK_API_KEY = process.env.POSITIONSTACK_API_KEY;
@@ -12,7 +11,8 @@ export async function GET(req: Request) {
 
   try {
     const url = `https://www.magicbricks.com/new-projects-${city}`;
-    const { data } = await axios.get(url);
+    const response = await fetch(url);
+    const data = await response.text();
 
     const $ = cheerio.load(data);
     const projects = await Promise.all(
@@ -20,14 +20,11 @@ export async function GET(req: Request) {
         const projectName = $(element).find(".mghome__prjblk__prjname").text().trim();
         const location = $(element).find(".mghome__prjblk__locname").text().trim();
         const price = $(element).find(".mghome__prjblk__price").text().trim();
-        const geoResponse = await axios.get("http://api.positionstack.com/v1/forward", {
-          params: {
-            access_key: POSITIONSTACK_API_KEY,
-            query: location,
-          },
-        });
-
-        const { latitude, longitude } = geoResponse.data.data[0] || {};
+        
+        const geoResponse = await fetch(`http://api.positionstack.com/v1/forward?access_key=${POSITIONSTACK_API_KEY}&query=${encodeURIComponent(location)}`);
+        const geoData = await geoResponse.json();
+        console.log(geoData)
+        const { latitude, longitude } = geoData.data?.[0] || {};
 
         return {
           projectName,
@@ -38,14 +35,12 @@ export async function GET(req: Request) {
         };
       }).get()
     );
+
     return NextResponse.json(projects);
 
-  }catch (error: unknown) {
+  } catch (error) {
     console.error("Scraping error:", error);
-    
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    
     return NextResponse.json({ error: "Failed to scrape data", details: errorMessage }, { status: 500 });
   }
-  
 }
